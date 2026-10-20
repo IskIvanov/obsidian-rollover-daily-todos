@@ -1,13 +1,16 @@
-import { Setting, PluginSettingTab } from "obsidian";
+import { App, Setting, PluginSettingTab, TFile } from "obsidian";
 import { getDailyNoteSettings } from "obsidian-daily-notes-interface";
+import type RolloverTodosPlugin from "../index";
 
 export default class RolloverSettingTab extends PluginSettingTab {
-  constructor(app, plugin) {
+  plugin: RolloverTodosPlugin;
+
+  constructor(app: App, plugin: RolloverTodosPlugin) {
     super(app, plugin);
     this.plugin = plugin;
   }
 
-  async getTemplateHeadings() {
+  async getTemplateHeadings(): Promise<string[]> {
     const { template } = getDailyNoteSettings();
     if (!template) return [];
 
@@ -17,7 +20,7 @@ export default class RolloverSettingTab extends PluginSettingTab {
       file = this.app.vault.getAbstractFileByPath(template + ".md");
     }
 
-    if (file === null) {
+    if (!(file instanceof TFile)) {
       // file not available, no template-heading can be returned
       return [];
     }
@@ -39,7 +42,7 @@ export default class RolloverSettingTab extends PluginSettingTab {
       .addDropdown((dropdown) =>
         dropdown
           .addOptions({
-            ...templateHeadings.reduce((acc, heading) => {
+            ...templateHeadings.reduce<Record<string, string>>((acc, heading) => {
               acc[heading] = heading;
               return acc;
             }, {}),
@@ -112,7 +115,7 @@ export default class RolloverSettingTab extends PluginSettingTab {
             console.log(value);
             this.plugin.settings.rolloverOnFileCreate = value;
             this.plugin.saveSettings();
-            this.plugin.loadData().then((value) => console.log(value));
+            this.plugin.loadData().then((value: unknown) => console.log(value));
           })
       );
 

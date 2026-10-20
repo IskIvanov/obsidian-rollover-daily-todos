@@ -1,12 +1,16 @@
-import { Modal, Setting } from 'obsidian'
+import { Modal, Setting, TFile } from 'obsidian'
+import type RolloverTodosPlugin from '../index'
+import type { UndoDay, UndoHistoryInstance } from '../types'
 
 export default class UndoModal extends Modal {
-  constructor(plugin) {
+  plugin: RolloverTodosPlugin
+
+  constructor(plugin: RolloverTodosPlugin) {
     super(plugin.app)
     this.plugin = plugin
   }
 
-  async parseDay(day) {
+  async parseDay(day: UndoDay & { file: TFile }): Promise<string> {
     const { file, oldContent } = day
     let currentContent = await this.plugin.app.vault.read(file)
 
@@ -16,9 +20,9 @@ export default class UndoModal extends Modal {
 
     let s = ''
     if (oldContentLineCount > currentContentLineCount) {
-      s = `- ${file.basename}.${file.extension}: add ${diff} line${diff.length > 1 ? 's':''}.`
+      s = `- ${file.basename}.${file.extension}: add ${diff} line${diff > 1 ? 's':''}.`
     } else if (oldContentLineCount < currentContentLineCount) {
-      s = `- ${file.basename}.${file.extension}: remove ${diff} line${diff.length > 1 ? 's':''}.`
+      s = `- ${file.basename}.${file.extension}: remove ${diff} line${diff > 1 ? 's':''}.`
     } else {
       if (oldContent == currentContent) {
         s = `- ${file.basename}.${file.extension}: will not be modified.`
@@ -30,8 +34,10 @@ export default class UndoModal extends Modal {
     return s
   }
 
-  async confirmUndo(undoHistoryInstance) {
-    await this.plugin.app.vault.modify(undoHistoryInstance.today.file, undoHistoryInstance.today.oldContent);
+  async confirmUndo(undoHistoryInstance: UndoHistoryInstance) {
+    if (undoHistoryInstance.today.file != undefined) {
+      await this.plugin.app.vault.modify(undoHistoryInstance.today.file, undoHistoryInstance.today.oldContent);
+    }
     if (undoHistoryInstance.previousDay.file != undefined) {
       await this.plugin.app.vault.modify(undoHistoryInstance.previousDay.file, undoHistoryInstance.previousDay.oldContent);
     }
@@ -46,9 +52,13 @@ export default class UndoModal extends Modal {
     contentEl.createEl('h4', { text: 'Changes made with undo:' })
 
     const undoHistoryInstance = plugin.undoHistory[0]
-    let modTextArray = [await this.parseDay(undoHistoryInstance.today)]
-    if (undoHistoryInstance.previousDay.file != undefined) {
-      modTextArray.push(await this.parseDay(undoHistoryInstance.previousDay))
+    const { today, previousDay } = undoHistoryInstance
+    let modTextArray: string[] = []
+    if (today.file != undefined) {
+      modTextArray.push(await this.parseDay({ ...today, file: today.file }))
+    }
+    if (previousDay.file != undefined) {
+      modTextArray.push(await this.parseDay({ ...previousDay, file: previousDay.file }))
     }
     modTextArray.forEach(txt => {
       contentEl.createEl('div', { text: txt })
@@ -57,7 +67,7 @@ export default class UndoModal extends Modal {
     new Setting(contentEl)
       .addButton(button => button
         .setButtonText('Confirm Undo')
-        .onClick(async (e) => {
+        .onClick(async () => {
           await this.confirmUndo(undoHistoryInstance)
           this.close()
         })
