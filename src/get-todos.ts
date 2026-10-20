@@ -121,6 +121,25 @@ class TodoParser {
     return match ? match[1].length : 0;
   }
 
+  // Returns true if string s is a list item
+  #isListItem(s: string): boolean {
+    return /^\s*([*+-]|\d+[.)])\s/.test(s);
+  }
+
+  // Returns the indentation the todo at line `l` should be rolled over with.
+  // Ancestors that are not rolled over (e.g. a done parent) are skipped, so the
+  // todo moves up to the level of the outermost one instead of being left dangling
+  #getRolloverIndentation(l: number): string {
+    let childLinum = l;
+    for (let p = l - 1; p >= 0 && this.#getIndentation(childLinum) > 0; p--) {
+      const line = this.#lines[p];
+      if (line.trim() === "" || !this.#isChildOf(p, childLinum)) continue;
+      if (!this.#isListItem(line) || this.#isTodo(line)) break;
+      childLinum = p;
+    }
+    return this.#lines[childLinum].slice(0, this.#getIndentation(childLinum));
+  }
+
   // Returns the number of whitespace-characters at beginning of string at line `l`
   #getIndentation(l: number): number {
     return this.#lines[l].search(/\S/);
@@ -147,10 +166,14 @@ class TodoParser {
             section.added = true;
           }
         }
-        todos.push(line);
+        const indentation = this.#getRolloverIndentation(l);
+        const oldIndentationLength = this.#getIndentation(l);
+        const reindent = (s: string) =>
+          indentation + s.slice(oldIndentationLength);
+        todos.push(reindent(line));
         if (this.#withChildren && this.#hasChildren(l)) {
           const cs = this.#getChildren(l);
-          todos = [...todos, ...cs];
+          todos = [...todos, ...cs.map(reindent)];
           l += cs.length;
         }
       }
