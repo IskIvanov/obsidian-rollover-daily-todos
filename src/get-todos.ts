@@ -1,18 +1,18 @@
 class TodoParser {
   // Support all unordered list bullet symbols as per spec (https://daringfireball.net/projects/markdown/syntax#list)
-  bulletSymbols = ["-", "*", "+"];
+  bulletSymbols: string[] = ["-", "*", "+"];
 
   // Default completed status markers
-  doneStatusMarkers = ["x", "X", "-"];
+  doneStatusMarkers: string[] = ["x", "X", "-"];
 
   // List of strings that include the Markdown content
-  #lines;
+  #lines: string[];
 
   // Boolean that encodes whether nested items should be rolled over
-  #withChildren;
+  #withChildren: boolean;
 
   // Parse content with segmentation to allow for Unicode grapheme clusters
-  #parseIntoChars(content, contentType = "content") {
+  #parseIntoChars(content: string, contentType = "content"): string[] {
     // Use Intl.Segmenter to properly split grapheme clusters if available,
     // otherwise fall back to Array.from. The fallback should not trigger in
     // Obsidian since it uses Electron which supports Intl.Segmenter.
@@ -29,7 +29,11 @@ class TodoParser {
     }
   }
 
-  constructor(lines, withChildren, doneStatusMarkers) {
+  constructor(
+    lines: string[],
+    withChildren: boolean,
+    doneStatusMarkers: string | null
+  ) {
     this.#lines = lines;
     this.#withChildren = withChildren;
     if (doneStatusMarkers) {
@@ -41,7 +45,7 @@ class TodoParser {
   }
 
   // Returns true if string s is a todo-item
-  #isTodo(s) {
+  #isTodo(s: string): boolean {
     // Extract the checkbox content
     const match = s.match(/\s*[*+-] \[(.+?)\]/);
     if (!match) return false;
@@ -80,7 +84,7 @@ class TodoParser {
   }
 
   // Returns true if line after line-number `l` is a nested item
-  #hasChildren(l) {
+  #hasChildren(l: number): boolean {
     if (l + 1 >= this.#lines.length) {
       return false;
     }
@@ -93,8 +97,8 @@ class TodoParser {
   }
 
   // Returns a list of strings that are the nested items after line `parentLinum`
-  #getChildren(parentLinum) {
-    const children = [];
+  #getChildren(parentLinum: number): string[] {
+    const children: string[] = [];
     let nextLinum = parentLinum + 1;
     while (this.#isChildOf(parentLinum, nextLinum)) {
       children.push(this.#lines[nextLinum]);
@@ -104,7 +108,7 @@ class TodoParser {
   }
 
   // Returns true if line `linum` has more indentation than line `parentLinum`
-  #isChildOf(parentLinum, linum) {
+  #isChildOf(parentLinum: number, linum: number): boolean {
     if (parentLinum >= this.#lines.length || linum >= this.#lines.length) {
       return false;
     }
@@ -112,13 +116,13 @@ class TodoParser {
   }
 
   // Returns the number of whitespace-characters at beginning of string at line `l`
-  #getIndentation(l) {
+  #getIndentation(l: number): number {
     return this.#lines[l].search(/\S/);
   }
 
   // Returns a list of strings that represents all the todos along with there potential children
-  getTodos() {
-    let todos = [];
+  getTodos(): string[] {
+    let todos: string[] = [];
     for (let l = 0; l < this.#lines.length; l++) {
       const line = this.#lines[l];
       if (this.#isTodo(line)) {
@@ -134,12 +138,18 @@ class TodoParser {
   }
 }
 
+interface GetTodosOptions {
+  lines: string[];
+  withChildren?: boolean;
+  doneStatusMarkers?: string | null;
+}
+
 // Utility-function that acts as a thin wrapper around `TodoParser`
 export const getTodos = ({
   lines,
   withChildren = false,
   doneStatusMarkers = null,
-}) => {
+}: GetTodosOptions): string[] => {
   const todoParser = new TodoParser(lines, withChildren, doneStatusMarkers);
   return todoParser.getTodos();
 };

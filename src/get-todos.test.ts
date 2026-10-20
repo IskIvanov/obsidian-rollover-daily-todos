@@ -33,7 +33,7 @@ test("single done todo element should not return itself", () => {
   const result = getTodos({ lines });
 
   // THEN
-  const todos = [];
+  const todos: string[] = [];
   expect(result).toStrictEqual(todos);
 });
 
@@ -45,7 +45,7 @@ test("single canceled todo element should not return itself", () => {
   const result = getTodos({ lines });
 
   // THEN
-  const todos = [];
+  const todos: string[] = [];
   expect(result).toStrictEqual(todos);
 });
 

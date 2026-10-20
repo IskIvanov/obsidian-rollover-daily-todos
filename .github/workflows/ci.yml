@@ -17,3 +17,5 @@ jobs:
           run_install: true
       - name: Build
         run: pnpm build
+      - name: Type-check
+        run: pnpm typecheck

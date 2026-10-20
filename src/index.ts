@@ -1,4 +1,4 @@
-import { Notice, Plugin } from "obsidian";
+import { Notice, Plugin, TAbstractFile, TFile } from "obsidian";
 import {
   getDailyNoteSettings,
   getAllDailyNotes,
@@ -7,6 +7,7 @@ import {
 import UndoModal from "./ui/UndoModal";
 import RolloverSettingTab from "./ui/RolloverSettingTab";
 import { getTodos } from "./get-todos";
+import type { RolloverSettings, UndoHistoryInstance } from "./types";
 
 const MAX_TIME_SINCE_CREATION = 5000; // 5 seconds
 
@@ -39,8 +40,12 @@ function createRepresentationFromHeadings(headings) {
 */
 
 export default class RolloverTodosPlugin extends Plugin {
+  declare settings: RolloverSettings;
+  undoHistory: UndoHistoryInstance[] = [];
+  undoHistoryTime: Date = new Date();
+
   async loadSettings() {
-    const DEFAULT_SETTINGS = {
+    const DEFAULT_SETTINGS: RolloverSettings = {
       templateHeading: "none",
       deleteOnComplete: false,
       removeEmptyTodos: false,
@@ -56,7 +61,7 @@ export default class RolloverTodosPlugin extends Plugin {
     await this.saveData(this.settings);
   }
 
-  isDailyNotesEnabled() {
+  isDailyNotesEnabled(): boolean {
     const dailyNotesPlugin = this.app.internalPlugins.plugins["daily-notes"];
     const dailyNotesEnabled = dailyNotesPlugin && dailyNotesPlugin.enabled;
 
@@ -64,12 +69,12 @@ export default class RolloverTodosPlugin extends Plugin {
     const periodicNotesEnabled =
       periodicNotesPlugin && periodicNotesPlugin.settings?.daily?.enabled;
 
-    return dailyNotesEnabled || periodicNotesEnabled;
+    return Boolean(dailyNotesEnabled || periodicNotesEnabled);
   }
 
-  getLastDailyNote() {
+  getLastDailyNote(): TFile | undefined {
     const { moment } = window;
-    let { folder, format } = getDailyNoteSettings();
+    let { folder = "", format } = getDailyNoteSettings();
 
     folder = this.getCleanFolder(folder);
     folder = folder.length === 0 ? folder : folder + "/";
@@ -105,7 +110,8 @@ export default class RolloverTodosPlugin extends Plugin {
     return sorted[1];
   }
 
-  getFileMoment(file, folder, format) {
+  getFileMoment(file: TFile, folder: string, format: string | undefined) {
+    const { moment } = window;
     let path = file.path;
 
     if (path.startsWith(folder)) {
@@ -121,7 +127,7 @@ export default class RolloverTodosPlugin extends Plugin {
     return moment(path, format);
   }
 
-  async getAllUnfinishedTodos(file) {
+  async getAllUnfinishedTodos(file: TFile): Promise<string[]> {
     const dn = await this.app.vault.read(file);
     const dnLines = dn.split(/\r?\n|\r|\n/g);
 
@@ -132,19 +138,20 @@ export default class RolloverTodosPlugin extends Plugin {
     });
   }
 
-  async sortHeadersIntoHierarchy(file) {
-    ///console.log('testing')
-    const templateContents = await this.app.vault.read(file);
-    const allHeadings = Array.from(templateContents.matchAll(/#{1,} .*/g)).map(
-      ([heading]) => heading
-    );
+  // Depends on the commented-out `createRepresentationFromHeadings` boilerplate above
+  // async sortHeadersIntoHierarchy(file: TFile) {
+  //   ///console.log('testing')
+  //   const templateContents = await this.app.vault.read(file);
+  //   const allHeadings = Array.from(templateContents.matchAll(/#{1,} .*/g)).map(
+  //     ([heading]) => heading
+  //   );
+  //
+  //   if (allHeadings.length > 0) {
+  //     console.log(createRepresentationFromHeadings(allHeadings));
+  //   }
+  // }
 
-    if (allHeadings.length > 0) {
-      console.log(createRepresentationFromHeadings(allHeadings));
-    }
-  }
-
-  getCleanFolder(folder) {
+  getCleanFolder(folder: string): string {
     // Check if user defined folder with root `/` e.g. `/dailies`
     if (folder.startsWith("/")) {
       folder = folder.substring(1);
@@ -158,9 +165,9 @@ export default class RolloverTodosPlugin extends Plugin {
     return folder;
   }
 
-  async rollover(file = undefined) {
+  async rollover(file?: TAbstractFile) {
     /*** First we check if the file created is actually a valid daily note ***/
-    let { folder, format } = getDailyNoteSettings();
+    let { folder = "", format } = getDailyNoteSettings();
     let ignoreCreationTime = false;
 
     // Rollover can be called, but we need to get the daily file
@@ -169,7 +176,7 @@ export default class RolloverTodosPlugin extends Plugin {
       file = getDailyNote(window.moment(), allDailyNotes);
       ignoreCreationTime = true;
     }
-    if (!file) return;
+    if (!(file instanceof TFile)) return;
 
     folder = this.getCleanFolder(folder);
 
@@ -220,7 +227,7 @@ export default class RolloverTodosPlugin extends Plugin {
       }
 
       // setup undo history
-      let undoHistoryInstance = {
+      let undoHistoryInstance: UndoHistoryInstance = {
         previousDay: {
           file: undefined,
           oldContent: "",
@@ -329,7 +336,7 @@ export default class RolloverTodosPlugin extends Plugin {
       }`;
 
       let allParts = [part1, part2, part3];
-      let nonBlankLines = [];
+      let nonBlankLines: string[] = [];
       allParts.forEach((part) => {
         if (part.length > 0) {
           nonBlankLines.push(part);
@@ -347,8 +354,6 @@ export default class RolloverTodosPlugin extends Plugin {
 
   async onload() {
     await this.loadSettings();
-    this.undoHistory = [];
-    this.undoHistoryTime = new Date();
 
     this.addSettingTab(new RolloverSettingTab(this.app, this));
 
@@ -371,7 +376,7 @@ export default class RolloverTodosPlugin extends Plugin {
     this.addCommand({
       id: "obsidian-rollover-daily-todos-undo",
       name: "Undo last rollover",
-      checkCallback: (checking) => {
+      checkCallback: (checking: boolean) => {
         // no history, don't allow undo
         if (this.undoHistory.length > 0) {
           const now = window.moment();
