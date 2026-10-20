@@ -120,7 +120,7 @@ test("get todos (with alternate symbols and partially checked todos) with childr
 
   // THEN
   const result = [
-    "    + [ ] Next",
+    "+ [ ] Next",
     "* [ ] Another one",
     "    - [x] Completed child",
     "    + another child",
@@ -149,7 +149,7 @@ test("get todos (with custom ✅ done status and 🟣 not-done child status) wit
 
   // THEN
   const result = [
-    "    + [🟣] Next",
+    "+ [🟣] Next",
     "* [🟣] Another one",
     "    - [✅] Completed child",
     "    + another child",
@@ -174,7 +174,7 @@ test("get todos (with default dash prefix and finished todos) with children", fu
 
   // THEN
   const result = [
-    "    - [ ] Next",
+    "- [ ] Next",
     "- [ ] Another one",
     "    - [x] Completed child",
     "    + another child",
@@ -538,7 +538,6 @@ test("should not match malformed todos", () => {
   expect(todos).toStrictEqual(["- [ ] valid todo"]);
 });
 
-// If a parent todo is checked (for example "- [x] Parent task"), the child todos should be moved back so it doesn't break the top level.
 test.each(["#", "##", "###", "####", "#####", "######"])(
   "get todos rolls over the %s section heading together with its todos",
   (hashes) => {
@@ -651,4 +650,58 @@ test("get todos does not treat non-headings as section headings", () => {
 
   // THEN
   expect(todos).toStrictEqual(["- [ ] Write report"]);
+});
+
+test("get todos promotes the child todos of a done parent to the top level", () => {
+  // GIVEN
+  const lines = [
+    "- [x] Parent task",
+    "    - [ ] Child task",
+    "    - [ ] Second child task",
+  ];
+
+  // WHEN
+  const todos = getTodos({ lines });
+
+  // THEN
+  const result = ["- [ ] Child task", "- [ ] Second child task"];
+  expect(todos).toStrictEqual(result);
+});
+
+test("get todos with children promotes the subtree of a done parent", () => {
+  // GIVEN
+  const lines = [
+    "- [x] Parent task",
+    "    - [ ] Child task",
+    "        - [ ] Grandchild task",
+    "        - some note",
+    "- [ ] Sibling task",
+  ];
+
+  // WHEN
+  const todos = getTodos({ lines, withChildren: true });
+
+  // THEN
+  const result = [
+    "- [ ] Child task",
+    "    - [ ] Grandchild task",
+    "    - some note",
+    "- [ ] Sibling task",
+  ];
+  expect(todos).toStrictEqual(result);
+});
+
+test("get todos promotes a todo whose done ancestors span several levels", () => {
+  // GIVEN
+  const lines = [
+    "- [x] Parent task",
+    "    - [x] Child task",
+    "        - [ ] Grandchild task",
+  ];
+
+  // WHEN
+  const todos = getTodos({ lines });
+
+  // THEN
+  expect(todos).toStrictEqual(["- [ ] Grandchild task"]);
 });
