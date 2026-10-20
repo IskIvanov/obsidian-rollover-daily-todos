@@ -23,7 +23,7 @@ class TodoParser {
       // Array.from() splits surrogate pairs correctly but not complex grapheme clusters
       // (e.g., 👨‍👩‍👧‍👦 would be split incorrectly) and fail to match.
       console.error(
-        `Intl.Segmenter not available, falling back to Array.from() for ${contentType}`
+        `Intl.Segmenter not available, falling back to Array.from() for ${contentType}`,
       );
       return Array.from(content);
     }
@@ -32,14 +32,14 @@ class TodoParser {
   constructor(
     lines: string[],
     withChildren: boolean,
-    doneStatusMarkers: string | null
+    doneStatusMarkers: string | null,
   ) {
     this.#lines = lines;
     this.#withChildren = withChildren;
     if (doneStatusMarkers) {
       this.doneStatusMarkers = this.#parseIntoChars(
         doneStatusMarkers,
-        "done status markers"
+        "done status markers",
       );
     }
   }
@@ -55,7 +55,7 @@ class TodoParser {
     // Parse content with segmentation to allow for Unicode grapheme clusters
     const contentChars = this.#parseIntoChars(
       checkboxContent,
-      "checkbox content"
+      "checkbox content",
     );
 
     // Valid checkbox content must be exactly one grapheme cluster
@@ -66,9 +66,9 @@ class TodoParser {
     const singleChar = contentChars[0];
 
     // Exclude grapheme modifiers that are not valid as standalone content
-    const graphemeModifiers = ['\u202E', '\u200B', '\u200C', '\u200D'];
+    const graphemeModifiers = ["\u202E", "\u200B", "\u200C", "\u200D"];
     const hasGraphemeModifier = contentChars.some((char) =>
-      graphemeModifiers.includes(char)
+      graphemeModifiers.includes(char),
     );
     if (hasGraphemeModifier) {
       return false;
@@ -76,7 +76,7 @@ class TodoParser {
 
     // Check if the checkbox content contains any characters that are in doneStatusMarkers
     const hasDoneMarker = contentChars.some((char) =>
-      this.doneStatusMarkers.includes(char)
+      this.doneStatusMarkers.includes(char),
     );
 
     // Return true (is a todo) if it does NOT contain any done markers
@@ -115,6 +115,12 @@ class TodoParser {
     return this.#getIndentation(linum) > this.#getIndentation(parentLinum);
   }
 
+  // Returns the heading level (number of `#`) of string s, or 0 if it is not a heading
+  #getHeadingLevel(s: string): number {
+    const match = s.match(/^ {0,3}(#{1,6})(\s|$)/);
+    return match ? match[1].length : 0;
+  }
+
   // Returns the number of whitespace-characters at beginning of string at line `l`
   #getIndentation(l: number): number {
     return this.#lines[l].search(/\S/);
@@ -123,9 +129,24 @@ class TodoParser {
   // Returns a list of strings that represents all the todos along with there potential children
   getTodos(): string[] {
     let todos: string[] = [];
+    // Headings that enclose the current line, outermost first
+    let sections: { line: string; level: number; added: boolean }[] = [];
     for (let l = 0; l < this.#lines.length; l++) {
       const line = this.#lines[l];
+      const headingLevel = this.#getHeadingLevel(line);
+      if (headingLevel > 0) {
+        // A heading ends every open section of the same or a deeper level
+        sections = sections.filter((s) => s.level < headingLevel);
+        sections.push({ line, level: headingLevel, added: false });
+      }
       if (this.#isTodo(line)) {
+        // Add the enclosing headings before the first todo of their section
+        for (const section of sections) {
+          if (!section.added) {
+            todos.push(section.line);
+            section.added = true;
+          }
+        }
         todos.push(line);
         if (this.#withChildren && this.#hasChildren(l)) {
           const cs = this.#getChildren(l);

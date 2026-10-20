@@ -346,9 +346,11 @@ test("get todos doesn't add intermediate other elements", () => {
 
   // THEN
   const result = [
+    "# Some title",
     "- [ ] TODO",
     "    - [ ] Next",
     "    - some stuff",
+    "## Some title",
     "- [ ] Another one",
     "    - [ ] More children",
     "    - another child",
@@ -534,4 +536,119 @@ test("should not match malformed todos", () => {
   ];
   const todos = getTodos({ lines });
   expect(todos).toStrictEqual(["- [ ] valid todo"]);
+});
+
+// If a parent todo is checked (for example "- [x] Parent task"), the child todos should be moved back so it doesn't break the top level.
+test.each(["#", "##", "###", "####", "#####", "######"])(
+  "get todos rolls over the %s section heading together with its todos",
+  (hashes) => {
+    // GIVEN
+    const lines = [`${hashes} Work`, "- [ ] Write report", "- [ ] Review PR"];
+
+    // WHEN
+    const todos = getTodos({ lines });
+
+    // THEN
+    const result = [`${hashes} Work`, "- [ ] Write report", "- [ ] Review PR"];
+    expect(todos).toStrictEqual(result);
+  },
+);
+
+test.each(["#", "##", "###", "####", "#####", "######"])(
+  "get todos only rolls over %s section headings that contain open todos",
+  (hashes) => {
+    // GIVEN
+    const lines = [
+      "- [ ] Not in a section",
+      "",
+      `${hashes} Work`,
+      "- [ ] Write report",
+      "    - [ ] Gather numbers",
+      "- [x] Send email",
+      "",
+      `${hashes} Done section`,
+      "- [x] Already finished",
+      "",
+      `${hashes} Home`,
+      "- [ ] Buy groceries",
+    ];
+
+    // WHEN
+    const todos = getTodos({ lines, withChildren: true });
+
+    // THEN
+    const result = [
+      "- [ ] Not in a section",
+      `${hashes} Work`,
+      "- [ ] Write report",
+      "    - [ ] Gather numbers",
+      `${hashes} Home`,
+      "- [ ] Buy groceries",
+    ];
+    expect(todos).toStrictEqual(result);
+  },
+);
+
+test("get todos rolls over the parent headings of nested sections", () => {
+  // GIVEN
+  const lines = [
+    "# Projects",
+    "## Work",
+    "### Reports",
+    "- [ ] Write report",
+    "### Reviews",
+    "- [x] Review PR",
+    "## Home",
+    "- [ ] Buy groceries",
+    "# Notes",
+    "## Ideas",
+    "- [x] Already finished",
+    "###### Deep",
+    "- [ ] Deep todo",
+  ];
+
+  // WHEN
+  const todos = getTodos({ lines });
+
+  // THEN
+  const result = [
+    "# Projects",
+    "## Work",
+    "### Reports",
+    "- [ ] Write report",
+    "## Home",
+    "- [ ] Buy groceries",
+    "# Notes",
+    "## Ideas",
+    "###### Deep",
+    "- [ ] Deep todo",
+  ];
+  expect(todos).toStrictEqual(result);
+});
+
+test("get todos does not roll over a heading for todos that come before it", () => {
+  // GIVEN
+  const lines = ["- [ ] Before any heading", "## Empty section", "Some text"];
+
+  // WHEN
+  const todos = getTodos({ lines });
+
+  // THEN
+  expect(todos).toStrictEqual(["- [ ] Before any heading"]);
+});
+
+test("get todos does not treat non-headings as section headings", () => {
+  // GIVEN
+  const lines = [
+    "#tag",
+    "####### Seven hashes",
+    "    # Indented code",
+    "- [ ] Write report",
+  ];
+
+  // WHEN
+  const todos = getTodos({ lines });
+
+  // THEN
+  expect(todos).toStrictEqual(["- [ ] Write report"]);
 });
